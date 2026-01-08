@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform;
+import 'dart:io' show Platform;
 
 void main() {
   runApp(const Game2048App());
@@ -174,25 +176,60 @@ class Game2048Screen extends StatefulWidget {
 class _Game2048ScreenState extends State<Game2048Screen> {
   late List<List<int>> grid;
   int score = 0;
-  int bestScore = 0; // Добавлен лучший счет
+  int bestScore = 0;
   bool gameOver = false;
-  bool gameWon = false; // Флаг победы
-
+  bool gameWon = false;
+  
+  // Платформо-специфичные настройки
+  final bool isAndroid = defaultTargetPlatform == TargetPlatform.android;
+  final bool isIOS = defaultTargetPlatform == TargetPlatform.iOS;
+  final bool isWeb = kIsWeb;
+  // Загрузка лучшего счета (заглушка)
+  Future<void> _loadBestScore() async {
+    // Для Android/iOS можно использовать shared_preferences
+    // Для Web - localStorage
+    await Future.delayed(const Duration(milliseconds: 100));
+    // Заглушка - в реальном приложении здесь будет загрузка
+  }
+  
+  void _saveBestScore() async {
+    if (score > bestScore) {
+      setState(() {
+        bestScore = score;
+      });
+      // В реальном приложении здесь будет сохранение
+    }
+    
+    // Платформо-специфичная вибрация
+    if (isAndroid || isIOS) {
+      _triggerVibration();
+    }
+  }
   @override
   void initState() {
     super.initState();
+    _loadBestScore();
     initGame();
+  }
+  
+
+  // Вибрация для мобильных устройств
+  void _triggerVibration() {
+    // Используем MethodChannel для нативной вибрации
+    // Это упрощенный пример
+    if (isAndroid) {
+      // HapticFeedback.vibrate(); - в реальном приложении
+    }
   }
 
   void initGame() {
-    setState(() {
-      grid = List.generate(4, (_) => List.generate(4, (_) => 0));
-      score = 0;
-      gameOver = false;
-      gameWon = false;
-      addRandomTile();
-      addRandomTile();
-    });
+    grid = List.generate(4, (_) => List.generate(4, (_) => 0));
+    score = 0;
+    gameOver = false;
+    gameWon = false;
+    addRandomTile();
+    addRandomTile();
+    setState(() {});
   }
 
   void addRandomTile() {
@@ -483,307 +520,351 @@ class _Game2048ScreenState extends State<Game2048Screen> {
         title: const Text('2048'),
         centerTitle: true,
         actions: [
-          // Кнопка перезапуска в AppBar
           IconButton(
             icon: const Icon(Icons.restart_alt),
             onPressed: initGame,
             tooltip: 'Новая игра',
           ),
+          // Платформо-специфичное меню
+          if (!isWeb)
+            PopupMenuButton(
+              itemBuilder: (context) => [
+                PopupMenuItem(
+                  child: const Text('Настройки'),
+                  onTap: () {
+                    _showPlatformSpecificDialog(context);
+                  },
+                ),
+                PopupMenuItem(
+                  child: const Text('О приложении'),
+                  onTap: () {
+                    _showAboutDialog(context);
+                  },
+                ),
+              ],
+            ),
         ],
       ),
-      body: Column(
-        children: [
-          // Улучшенная информационная панель
-          Container(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                // Текущий счет
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[100],
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Column(
+      body: GestureDetector(
+        // Обработка свайпов для мобильных устройств
+        onHorizontalDragEnd: (details) {
+          if (details.primaryVelocity! > 0) {
+            // Свайп вправо
+            moveRight();
+          } else if (details.primaryVelocity! < 0) {
+            // Свайп влево
+            moveLeft();
+          }
+        },
+        onVerticalDragEnd: (details) {
+          if (details.primaryVelocity! > 0) {
+            // Свайп вниз
+            moveDown();
+          } else if (details.primaryVelocity! < 0) {
+            // Свайп вверх
+            moveUp();
+          }
+        },
+        child: Column(
+          children: [
+            // Информационная панель
+            Container(
+              padding: EdgeInsets.all(isWeb ? 20 : 16), // Адаптивный padding
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  Column(
                     children: [
                       const Text(
                         'СЧЕТ',
                         style: TextStyle(
-                          fontSize: 14,
+                          fontSize: 16,
                           fontWeight: FontWeight.bold,
                           color: Colors.grey,
                         ),
                       ),
                       Text(
                         '$score',
-                        style: const TextStyle(
-                          fontSize: 28,
+                        style: TextStyle(
+                          fontSize: isWeb ? 36 : 32, // Больше на Web
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                     ],
                   ),
-                ),
-                // Лучший счет
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.orange[50],
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.orange[200]!),
-                  ),
-                  child: Column(
+                  Column(
                     children: [
                       const Text(
                         'РЕКОРД',
                         style: TextStyle(
-                          fontSize: 14,
+                          fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: Colors.orange,
+                          color: Colors.grey,
                         ),
                       ),
                       Text(
                         '$bestScore',
-                        style: const TextStyle(
-                          fontSize: 28,
+                        style: TextStyle(
+                          fontSize: isWeb ? 36 : 32,
                           fontWeight: FontWeight.bold,
                           color: Colors.orange,
                         ),
                       ),
                     ],
                   ),
-                ),
-              ],
+                  // Платформо-специфичная иконка
+                  if (isAndroid)
+                    const Icon(Icons.android, color: Colors.green),
+                  if (isIOS)
+                    const Icon(Icons.apple, color: Colors.grey),
+                  if (isWeb)
+                    const Icon(Icons.web, color: Colors.blue),
+                ],
+              ),
             ),
-          ),
-          
-          // Игровое поле с тенью
-          Expanded(
-            child: Center(
-              child: AspectRatio(
-                aspectRatio: 1,
-                child: Container(
-                  margin: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
+            
+            // Адаптивное игровое поле
+            Expanded(
+              child: Center(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    // Адаптивный размер в зависимости от платформы
+                    double size = constraints.maxWidth > 600 
+                        ? 400  // Для планшетов и десктопов
+                        : constraints.maxWidth - 32; // Для телефонов
+                    
+                    return Container(
+                      width: size,
+                      height: size,
+                      margin: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  child: GridView.builder(
-                    padding: const EdgeInsets.all(8),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 4,
-                      crossAxisSpacing: 8,
-                      mainAxisSpacing: 8,
-                    ),
-                    itemCount: 16,
-                    itemBuilder: (context, index) {
-                      int row = index ~/ 4;
-                      int col = index % 4;
-                      int value = grid[row][col];
-                      
-                      return AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
-                        decoration: BoxDecoration(
-                          color: getTileColor(value),
-                          borderRadius: BorderRadius.circular(6),
-                          boxShadow: value > 0
-                              ? [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.1),
-                                    blurRadius: 4,
-                                    offset: const Offset(0, 2),
-                                  )
-                                ]
-                              : null,
+                      child: GridView.builder(
+                        padding: const EdgeInsets.all(8),
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 4,
+                          crossAxisSpacing: 8,
+                          mainAxisSpacing: 8,
                         ),
-                        child: Center(
-                          child: value == 0
-                              ? const SizedBox()
-                              : Text(
-                                  '$value',
-                                  style: TextStyle(
-                                    fontSize: value < 100 ? 24 : 
-                                             value < 1000 ? 20 : 16,
-                                    fontWeight: FontWeight.bold,
-                                    color: getTextColor(value),
-                                  ),
-                                ),
-                        ),
-                      );
-                    },
-                  ),
+                        itemCount: 16,
+                        itemBuilder: (context, index) {
+                          int row = index ~/ 4;
+                          int col = index % 4;
+                          int value = grid[row][col];
+                          
+                          return AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            curve: Curves.easeInOut,
+                            decoration: BoxDecoration(
+                              color: getTileColor(value),
+                              borderRadius: BorderRadius.circular(6),
+                              boxShadow: value > 0
+                                  ? [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.1),
+                                        blurRadius: 4,
+                                        offset: const Offset(0, 2),
+                                      )
+                                    ]
+                                  : null,
+                            ),
+                            child: Center(
+                              child: value == 0
+                                  ? const SizedBox()
+                                  : Text(
+                                      '$value',
+                                      style: TextStyle(
+                                        fontSize: _getTileFontSize(value, size),
+                                        fontWeight: FontWeight.bold,
+                                        color: getTextColor(value),
+                                      ),
+                                    ),
+                            ),
+                          );
+                        },
+                      ),
+                    );
+                  },
                 ),
               ),
             ),
-          ),
-          
-          // Сообщения о состоянии игры
-          if (gameWon)
-            Container(
-              padding: const EdgeInsets.all(12),
-              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.green,
-                borderRadius: BorderRadius.circular(8),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.green.withOpacity(0.3),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
+            
+            // Сообщения о состоянии игры
+            if (gameWon)
+              Container(
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.green,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  '🎉 Вы достигли 2048! Продолжайте играть!',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
                   ),
-                ],
+                  textAlign: TextAlign.center,
+                ),
               ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.celebration, color: Colors.white),
-                  SizedBox(width: 8),
-                  Text(
-                    'Вы достигли 2048! Продолжайте играть!',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
+            
+            if (gameOver)
+              Container(
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text(
+                  '💥 Игра окончена! Начните новую игру.',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
                   ),
-                ],
+                  textAlign: TextAlign.center,
+                ),
               ),
-            ),
-          
-          if (gameOver)
-            Container(
-              padding: const EdgeInsets.all(12),
-              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.red,
-                borderRadius: BorderRadius.circular(8),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.red.withOpacity(0.3),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.warning, color: Colors.white),
-                  SizedBox(width: 8),
-                  Text(
-                    'Игра окончена! Начните новую игру.',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          
-          // Полноценная панель управления
-          Container(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                SizedBox(
-                  width: 200,
-                  child: Column(
-                    children: [
-                      // Кнопка вверх
-                      IconButton(
-                        onPressed: moveUp,
-                        icon: const Icon(Icons.keyboard_arrow_up, size: 40),
-                        style: IconButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.all(12),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      // Кнопки влево/вправо
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
+            
+            // Управление - скрываем кнопки на мобильных, если используются свайпы
+            if (!isAndroid && !isIOS) // Показываем кнопки только на Web и десктопе
+              Container(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    SizedBox(
+                      width: 200,
+                      child: Column(
                         children: [
                           IconButton(
-                            onPressed: moveLeft,
-                            icon: const Icon(Icons.keyboard_arrow_left, size: 40),
+                            onPressed: moveUp,
+                            icon: const Icon(Icons.keyboard_arrow_up, size: 40),
                             style: IconButton.styleFrom(
                               backgroundColor: Colors.blue,
                               foregroundColor: Colors.white,
-                              padding: const EdgeInsets.all(12),
                             ),
                           ),
-                          const SizedBox(width: 40),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              IconButton(
+                                onPressed: moveLeft,
+                                icon: const Icon(Icons.keyboard_arrow_left, size: 40),
+                                style: IconButton.styleFrom(
+                                  backgroundColor: Colors.blue,
+                                  foregroundColor: Colors.white,
+                                ),
+                              ),
+                              const SizedBox(width: 40),
+                              IconButton(
+                                onPressed: moveRight,
+                                icon: const Icon(Icons.keyboard_arrow_right, size: 40),
+                                style: IconButton.styleFrom(
+                                  backgroundColor: Colors.blue,
+                                  foregroundColor: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
                           IconButton(
-                            onPressed: moveRight,
-                            icon: const Icon(Icons.keyboard_arrow_right, size: 40),
+                            onPressed: moveDown,
+                            icon: const Icon(Icons.keyboard_arrow_down, size: 40),
                             style: IconButton.styleFrom(
                               backgroundColor: Colors.blue,
                               foregroundColor: Colors.white,
-                              padding: const EdgeInsets.all(12),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      // Кнопка вниз
-                      IconButton(
-                        onPressed: moveDown,
-                        icon: const Icon(Icons.keyboard_arrow_down, size: 40),
-                        style: IconButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.all(12),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    ElevatedButton.icon(
-                      onPressed: initGame,
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Новая игра'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.orange,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                      ),
                     ),
-                    const SizedBox(width: 16),
-                    OutlinedButton.icon(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.exit_to_app),
-                      label: const Text('В меню'),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                      ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Используйте стрелки или свайпы',
+                      style: TextStyle(color: Colors.grey),
+                      textAlign: TextAlign.center,
                     ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                const Text(
-                  'Используйте кнопки для перемещения плиток',
-                  style: TextStyle(color: Colors.grey, fontSize: 12),
-                  textAlign: TextAlign.center,
-                ),
-              ],
+              ),
+            
+            // Кнопки действий (всегда видны)
+            Container(
+              padding: const EdgeInsets.only(bottom: 16, left: 16, right: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: initGame,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Новая игра'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  OutlinedButton.icon(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.exit_to_app),
+                    label: const Text('В меню'),
+                  ),
+                ],
+              ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+// Адаптивный размер шрифта для плиток
+  double _getTileFontSize(int value, double containerSize) {
+    double baseSize = containerSize / 16; // Базовая пропорция
+    
+    if (value < 100) return baseSize * 1.5;
+    if (value < 1000) return baseSize * 1.2;
+    return baseSize; // Для 1024, 2048
+  }
+
+  // Платформо-специфичный диалог
+  void _showPlatformSpecificDialog(BuildContext context) {
+    String platform = isAndroid ? 'Android' : isIOS ? 'iOS' : 'Unknown';
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Информация о платформе'),
+        content: Text('Вы используете приложение на $platform'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
           ),
         ],
       ),
+    );
+  }
+
+  void _showAboutDialog(BuildContext context) {
+    showAboutDialog(
+      context: context,
+      applicationName: '2048 Game',
+      applicationVersion: '1.0.0',
+      applicationLegalese: '© 2024 Все права защищены',
+      children: [
+        const SizedBox(height: 16),
+        const Text('Классическая игра 2048, адаптированная для всех платформ.'),
+        const SizedBox(height: 8),
+        Text('Платформа: ${isAndroid ? 'Android' : isIOS ? 'iOS' : 'Web'}'),
+      ],
     );
   }
 
