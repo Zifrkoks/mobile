@@ -179,30 +179,36 @@ class _Game2048ScreenState extends State<Game2048Screen> {
   int bestScore = 0;
   bool gameOver = false;
   bool gameWon = false;
+  bool _isProcessingMove = false;
   
+  // История ходов для отладки
+  final List<String> _moveHistory = [];
   // Платформо-специфичные настройки
   final bool isAndroid = defaultTargetPlatform == TargetPlatform.android;
   final bool isIOS = defaultTargetPlatform == TargetPlatform.iOS;
   final bool isWeb = kIsWeb;
   // Загрузка лучшего счета (заглушка)
   Future<void> _loadBestScore() async {
-    // Для Android/iOS можно использовать shared_preferences
-    // Для Web - localStorage
-    await Future.delayed(const Duration(milliseconds: 100));
-    // Заглушка - в реальном приложении здесь будет загрузка
+    try {
+      // В реальном приложении здесь будет загрузка
+      await Future.delayed(const Duration(milliseconds: 100));
+      debugPrint('Загрузка лучшего счета завершена');
+    } catch (e) {
+      debugPrint('Ошибка загрузки лучшего счета: $e');
+    }
   }
+
   
   void _saveBestScore() async {
-    if (score > bestScore) {
-      setState(() {
-        bestScore = score;
-      });
-      // В реальном приложении здесь будет сохранение
-    }
-    
-    // Платформо-специфичная вибрация
-    if (isAndroid || isIOS) {
-      _triggerVibration();
+    try {
+      if (score > bestScore) {
+        setState(() {
+          bestScore = score;
+        });
+        debugPrint('Новый рекорд: $bestScore');
+      }
+    } catch (e) {
+      debugPrint('Ошибка сохранения рекорда: $e');
     }
   }
   @override
@@ -210,6 +216,9 @@ class _Game2048ScreenState extends State<Game2048Screen> {
     super.initState();
     _loadBestScore();
     initGame();
+    
+    // Логирование для отладки
+    debugPrint('Инициализация игрового экрана');
   }
   
 
@@ -223,15 +232,95 @@ class _Game2048ScreenState extends State<Game2048Screen> {
   }
 
   void initGame() {
-    grid = List.generate(4, (_) => List.generate(4, (_) => 0));
-    score = 0;
-    gameOver = false;
-    gameWon = false;
-    addRandomTile();
-    addRandomTile();
-    setState(() {});
+    try {
+      // Сброс всех состояний
+      _isProcessingMove = false;
+      _moveHistory.clear();
+      
+      setState(() {
+        grid = List.generate(4, (_) => List.generate(4, (_) => 0));
+        score = 0;
+        gameOver = false;
+        gameWon = false;
+      });
+      
+      // Добавляем две начальные плитки
+      _addRandomTileWithValidation();
+      _addRandomTileWithValidation();
+      
+      debugPrint('Новая игра инициализирована');
+    } catch (e) {
+      debugPrint('Ошибка инициализации игры: $e');
+      // Восстановление после ошибки
+      _recoverFromError();
+    }
   }
-
+  void _recoverFromError() {
+    debugPrint('Попытка восстановления после ошибки...');
+    
+    try {
+      // Простая стратегия восстановления - новая игра
+      initGame();
+      debugPrint('Восстановление успешно');
+    } catch (e) {
+      debugPrint('Не удалось восстановиться: $e');
+      // Последняя попытка - полный сброс
+      setState(() {
+        grid = List.generate(4, (_) => List.generate(4, (_) => 0));
+        score = 0;
+        gameOver = false;
+        gameWon = false;
+      });
+    }
+  }
+   void _debugPrintGrid() {
+    debugPrint('=== Текущее состояние игры ===');
+    debugPrint('Счет: $score, Рекорд: $bestScore');
+    debugPrint('GameOver: $gameOver, GameWon: $gameWon');
+    for (int i = 0; i < 4; i++) {
+      debugPrint('${grid[i][0]} ${grid[i][1]} ${grid[i][2]} ${grid[i][3]}');
+    }
+    debugPrint('=============================');
+  }
+  void _addRandomTileWithValidation() {
+    try {
+      List<Point> emptyCells = [];
+      for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
+          if (grid[i][j] == 0) {
+            emptyCells.add(Point(i, j));
+          }
+        }
+      }
+      
+      if (emptyCells.isEmpty) {
+        debugPrint('Нет пустых клеток для добавления плитки');
+        return;
+      }
+      
+      // Более надежный способ выбора случайной клетки
+      final random = DateTime.now().microsecondsSinceEpoch;
+      Point cell = emptyCells[random % emptyCells.length];
+      
+      // Проверка, что клетка действительно пустая
+      if (grid[cell.x][cell.y] != 0) {
+        debugPrint('Ошибка: клетка [${cell.x},${cell.y}] не пустая!');
+        // Попытка найти другую пустую клетку
+        for (var point in emptyCells) {
+          if (grid[point.x][point.y] == 0) {
+            cell = point;
+            break;
+          }
+        }
+      }
+      
+      // 90% шанс на 2, 10% на 4
+      grid[cell.x][cell.y] = (random % 10 == 0) ? 4 : 2;
+      debugPrint('Добавлена плитка ${grid[cell.x][cell.y]} в [${cell.x},${cell.y}]');
+    } catch (e) {
+      debugPrint('Ошибка добавления плитки: $e');
+    }
+  }
   void addRandomTile() {
     List<Point> emptyCells = [];
     for (int i = 0; i < 4; i++) {
@@ -249,83 +338,48 @@ class _Game2048ScreenState extends State<Game2048Screen> {
   }
   // Движение влево - основная логика игры
   void moveLeft() {
-    bool moved = false;
-    
-    for (int i = 0; i < 4; i++) {
-      List<int> row = grid[i];
-      List<int> newRow = [];
-      
-      // Собираем все ненулевые элементы
-      for (int j = 0; j < 4; j++) {
-        if (row[j] != 0) {
-          newRow.add(row[j]);
-        }
-      }
-      
-      // Слияние одинаковых плиток
-      for (int j = 0; j < newRow.length - 1; j++) {
-        if (newRow[j] == newRow[j + 1]) {
-          newRow[j] *= 2;
-          score += newRow[j]; // Увеличение счета
-          newRow.removeAt(j + 1);
-        }
-      }
-      
-      // Дополняем нулями до 4 элементов
-      while (newRow.length < 4) {
-        newRow.add(0);
-      }
-      
-      // Проверка, было ли движение
-      for (int j = 0; j < 4; j++) {
-        if (row[j] != newRow[j]) {
-          moved = true;
-        }
-      }
-      
-      grid[i] = newRow;
-    }
-    
-    if (moved) {
-      addRandomTile();
-      checkGameOver();
-    }
-    
-    setState(() {});
-  }
-
-    // Движение вправо
-    void moveRight() {
+    if (gameOver || gameWon || _isProcessingMove) return;
+    _isProcessingMove = true;
+    _moveHistory.add('LEFT - начальный счет: $score');
+    try {
       bool moved = false;
-      
+      List<List<int>> oldGrid = _copyGrid(grid); // Сохраняем старое состояние
       for (int i = 0; i < 4; i++) {
-        List<int> row = grid[i];
+        List<int> row = List.from(grid[i]);
         List<int> newRow = [];
         
-        // Собираем справа налево
-        for (int j = 3; j >= 0; j--) {
+        // Собираем все ненулевые элементы
+        for (int j = 0; j < 4; j++) {
           if (row[j] != 0) {
-            newRow.insert(0, row[j]);
+            newRow.add(row[j]);
           }
         }
         
-        // Слияние справа налево
-        for (int j = newRow.length - 1; j > 0; j--) {
-          if (newRow[j] == newRow[j - 1]) {
+        // Слияние одинаковых плиток
+        for (int j = 0; j < newRow.length - 1; j++) {
+          if (newRow[j] == newRow[j + 1]) {
             newRow[j] *= 2;
-            score += newRow[j];
-            newRow.removeAt(j - 1);
+            score += newRow[j]; // Увеличение счета
+            if (newRow[j] == 2048 && !gameWon) {
+              gameWon = true;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _showWinDialog();
+              });
+            }
+            newRow.removeAt(j + 1);
           }
         }
         
-        // Дополняем нулями слева
+        // Дополняем нулями до 4 элементов
         while (newRow.length < 4) {
-          newRow.insert(0, 0);
+          newRow.add(0);
         }
         
+        // Проверка, было ли движение
         for (int j = 0; j < 4; j++) {
           if (row[j] != newRow[j]) {
             moved = true;
+            break;
           }
         }
         
@@ -338,109 +392,269 @@ class _Game2048ScreenState extends State<Game2048Screen> {
       }
       
       setState(() {});
+    } catch (e) {
+      debugPrint('Ошибка в moveLeft: $e');
+      _moveHistory.add('LEFT - ОШИБКА: $e');
+      // Восстановление из истории или перезапуск
+      _recoverFromError();
+    } finally {
+      _isProcessingMove = false;
+      setState(() {});
+    }
+  }
+
+    // Движение вправо
+    void moveRight() {
+      if (gameOver || gameWon || _isProcessingMove) return;
+      _isProcessingMove = true;
+      _moveHistory.add('RIGHT - начальный счет: $score');
+      try{
+        List<List<int>> oldGrid = _copyGrid(grid); // Сохраняем старое состояние
+        
+        bool moved = false;
+        
+        for (int i = 0; i < 4; i++) {
+          List<int> row = grid[i];
+          List<int> newRow = [];
+          
+          // Собираем справа налево
+          for (int j = 3; j >= 0; j--) {
+            if (row[j] != 0) {
+              newRow.insert(0, row[j]);
+            }
+          }
+          
+          // Слияние справа налево
+          for (int j = newRow.length - 1; j > 0; j--) {
+            if (newRow[j] == newRow[j - 1]) {
+              newRow[j] *= 2;
+              score += newRow[j];
+              if (newRow[j] == 2048 && !gameWon) {
+              gameWon = true;
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                _showWinDialog();
+              });
+            }
+              newRow.removeAt(j - 1);
+            }
+          }
+          
+          // Дополняем нулями слева
+          while (newRow.length < 4) {
+            newRow.insert(0, 0);
+          }
+          
+          for (int j = 0; j < 4; j++) {
+            if (row[j] != newRow[j]) {
+              moved = true;
+              break;
+            }
+          }
+          
+          grid[i] = newRow;
+        }
+        
+        if (moved) {
+          addRandomTile();
+          checkGameOver();
+        }
+        
+        setState(() {});
+      }catch (e) {
+      debugPrint('Ошибка в moveRight: $e');
+      _moveHistory.add('RIGHT - ОШИБКА: $e');
+      // Восстановление из истории или перезапуск
+      _recoverFromError();
+    } finally {
+      _isProcessingMove = false;
+      setState(() {});
+    }
     }
   // Движение вверх
   void moveUp() {
-    bool moved = false;
     
-    for (int j = 0; j < 4; j++) {
-      List<int> column = [];
-      for (int i = 0; i < 4; i++) {
-        column.add(grid[i][j]);
-      }
-      
-      List<int> newColumn = [];
-      
-      for (int i = 0; i < 4; i++) {
-        if (column[i] != 0) {
-          newColumn.add(column[i]);
+    if (gameOver || gameWon || _isProcessingMove) return;
+    _isProcessingMove = true;
+    _moveHistory.add('LEFT - начальный счет: $score');
+    try{
+      bool moved = false;
+      List<List<int>> oldGrid = _copyGrid(grid); // Сохраняем старое состояние
+      for (int j = 0; j < 4; j++) {
+        List<int> column = [];
+        for (int i = 0; i < 4; i++) {
+          column.add(grid[i][j]);
         }
-      }
-      
-      for (int i = 0; i < newColumn.length - 1; i++) {
-        if (newColumn[i] == newColumn[i + 1]) {
-          newColumn[i] *= 2;
-          score += newColumn[i];
-          if (newColumn[i] == 2048 && !gameWon) {
-            gameWon = true;
-            _showWinDialog(); // Показ диалога победы
+        
+        List<int> newColumn = [];
+        
+        for (int i = 0; i < 4; i++) {
+          if (column[i] != 0) {
+            newColumn.add(column[i]);
           }
-          newColumn.removeAt(i + 1);
+        }
+        
+        for (int i = 0; i < newColumn.length - 1; i++) {
+          if (newColumn[i] == newColumn[i + 1]) {
+            newColumn[i] *= 2;
+            score += newColumn[i];
+            if (newColumn[i] == 2048 && !gameWon) {
+              gameWon = true;
+              _showWinDialog(); // Показ диалога победы
+            }
+            
+            newColumn.removeAt(i + 1);
+          }
+        }
+        
+        while (newColumn.length < 4) {
+          newColumn.add(0);
+        }
+        
+        for (int i = 0; i < 4; i++) {
+          if (column[i] != newColumn[i]) {
+            moved = true;
+          }
+          grid[i][j] = newColumn[i];
         }
       }
       
-      while (newColumn.length < 4) {
-        newColumn.add(0);
+      if (moved) {
+        addRandomTile();
+        checkGameOver();
+        _updateBestScore();
       }
       
-      for (int i = 0; i < 4; i++) {
-        if (column[i] != newColumn[i]) {
-          moved = true;
-        }
-        grid[i][j] = newColumn[i];
-      }
+      setState(() {});
+    }catch (e) {
+      debugPrint('Ошибка в moveLeft: $e');
+      _moveHistory.add('LEFT - ОШИБКА: $e');
+      // Восстановление из истории или перезапуск
+      _recoverFromError();
+    } finally {
+      _isProcessingMove = false;
+      setState(() {});
     }
-    
-    if (moved) {
-      addRandomTile();
-      checkGameOver();
-      _updateBestScore();
-    }
-    
-    setState(() {});
   }
 
   // Движение вниз
   void moveDown() {
-    bool moved = false;
-    
-    for (int j = 0; j < 4; j++) {
-      List<int> column = [];
-      for (int i = 0; i < 4; i++) {
-        column.add(grid[i][j]);
-      }
-      
-      List<int> newColumn = [];
-      
-      for (int i = 3; i >= 0; i--) {
-        if (column[i] != 0) {
-          newColumn.insert(0, column[i]);
+    if (gameOver || gameWon || _isProcessingMove) return;
+    _isProcessingMove = true;
+    _moveHistory.add('LEFT - начальный счет: $score');
+    try{
+      bool moved = false;
+      List<List<int>> oldGrid = _copyGrid(grid); // Сохраняем старое состояние
+      for (int j = 0; j < 4; j++) {
+        List<int> column = [];
+        for (int i = 0; i < 4; i++) {
+          column.add(grid[i][j]);
         }
-      }
-      
-      for (int i = newColumn.length - 1; i > 0; i--) {
-        if (newColumn[i] == newColumn[i - 1]) {
-          newColumn[i] *= 2;
-          score += newColumn[i];
-          if (newColumn[i] == 2048 && !gameWon) {
-            gameWon = true;
-            _showWinDialog();
+        
+        List<int> newColumn = [];
+        
+        for (int i = 3; i >= 0; i--) {
+          if (column[i] != 0) {
+            newColumn.insert(0, column[i]);
           }
-          newColumn.removeAt(i - 1);
+        }
+        
+        for (int i = newColumn.length - 1; i > 0; i--) {
+          if (newColumn[i] == newColumn[i - 1]) {
+            newColumn[i] *= 2;
+            score += newColumn[i];
+            if (newColumn[i] == 2048 && !gameWon) {
+              gameWon = true;
+              _showWinDialog();
+            }
+            newColumn.removeAt(i - 1);
+          }
+        }
+        
+        while (newColumn.length < 4) {
+          newColumn.insert(0, 0);
+        }
+        
+        for (int i = 0; i < 4; i++) {
+          if (column[i] != newColumn[i]) {
+            moved = true;
+          }
+          grid[i][j] = newColumn[i];
         }
       }
       
-      while (newColumn.length < 4) {
-        newColumn.insert(0, 0);
+      if (moved) {
+        addRandomTile();
+        checkGameOver();
+        _updateBestScore();
       }
       
+      setState(() {});
+    }catch (e) {
+      debugPrint('Ошибка в moveLeft: $e');
+      _moveHistory.add('LEFT - ОШИБКА: $e');
+      // Восстановление из истории или перезапуск
+      _recoverFromError();
+    } finally {
+      _isProcessingMove = false;
+      setState(() {});
+    }
+  }
+  // ИСПРАВЛЕННЫЙ метод проверки конца игры
+  void _checkGameOver() {
+    if (gameWon) return;
+    
+    try {
+      // Проверка на наличие пустых клеток
+      bool hasEmptyCell = false;
       for (int i = 0; i < 4; i++) {
-        if (column[i] != newColumn[i]) {
-          moved = true;
+        for (int j = 0; j < 4; j++) {
+          if (grid[i][j] == 0) {
+            hasEmptyCell = true;
+            break;
+          }
         }
-        grid[i][j] = newColumn[i];
+        if (hasEmptyCell) break;
       }
+      
+      if (hasEmptyCell) {
+        gameOver = false;
+        return;
+      }
+      
+      // Проверка на возможные слияния по горизонтали
+      for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 3; j++) {
+          if (grid[i][j] == grid[i][j + 1]) {
+            gameOver = false;
+            return;
+          }
+        }
+      }
+      
+      // Проверка на возможные слияния по вертикали
+      for (int j = 0; j < 4; j++) {
+        for (int i = 0; i < 3; i++) {
+          if (grid[i][j] == grid[i + 1][j]) {
+            gameOver = false;
+            return;
+          }
+        }
+      }
+      
+      // Если дошли сюда - игра окончена
+      gameOver = true;
+      debugPrint('Игра окончена! Финальный счет: $score');
+      
+    } catch (e) {
+      debugPrint('Ошибка в checkGameOver: $e');
+      gameOver = false; // На всякий случай сбрасываем флаг
     }
-    
-    if (moved) {
-      addRandomTile();
-      checkGameOver();
-      _updateBestScore();
-    }
-    
-    setState(() {});
   }
 
+  // Вспомогательный метод для копирования сетки
+  List<List<int>> _copyGrid(List<List<int>> source) {
+    return List.generate(source.length, (i) => List.from(source[i]));
+  }
   // Обновление лучшего счета
   void _updateBestScore() {
     if (score > bestScore) {
@@ -509,6 +723,7 @@ class _Game2048ScreenState extends State<Game2048Screen> {
 
   @override
   Widget build(BuildContext context) {
+    bool isDebugMode = true;
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -525,23 +740,11 @@ class _Game2048ScreenState extends State<Game2048Screen> {
             onPressed: initGame,
             tooltip: 'Новая игра',
           ),
-          // Платформо-специфичное меню
-          if (!isWeb)
-            PopupMenuButton(
-              itemBuilder: (context) => [
-                PopupMenuItem(
-                  child: const Text('Настройки'),
-                  onTap: () {
-                    _showPlatformSpecificDialog(context);
-                  },
-                ),
-                PopupMenuItem(
-                  child: const Text('О приложении'),
-                  onTap: () {
-                    _showAboutDialog(context);
-                  },
-                ),
-              ],
+          if (isDebugMode)
+            IconButton(
+              icon: const Icon(Icons.bug_report),
+              onPressed: _debugPrintGrid,
+              tooltip: 'Отладка',
             ),
         ],
       ),
