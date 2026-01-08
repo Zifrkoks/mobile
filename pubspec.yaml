@@ -1,19 +1,65 @@
+
 name: mobile
-description: "A new Flutter project."
-publish_to: 'none'
-version: 0.1.0
+description: Классическая игра 2048
+version: 1.0.0+1
+publish_to: 'none' # Убрать для публикации
 
 environment:
-  sdk: ^3.10.4
+  sdk: '>=3.0.0 <4.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
+  shared_preferences: ^2.2.2 # Для сохранения данных
+  vibration: ^1.7.4 # Для вибрации на мобильных
+  url_launcher: ^6.1.10 # Для ссылок
+  package_info_plus: ^5.0.1 # Для информации о версии
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^6.0.0
+  flutter_lints: ^2.0.0
+  integration_test:
+    sdk: flutter
 
 flutter:
   uses-material-design: true
+  
+  # Иконки приложения (генерируются flutter_launcher_icons)
+  icons:
+    android: true
+    ios: true
+    image_path_android: "assets/icons/icon_android.png"
+    image_path_ios: "assets/icons/icon_ios.png"
+  
+  # Скриншоты для магазинов
+  assets:
+    - assets/screenshots/
+    - assets/icons/
+  
+  # Настройки для разных платформ
+  android:
+    compileSdkVersion: 34
+    minSdkVersion: 21
+    targetSdkVersion: 34
+    
+    applicationId: "com.example.game2048"
+    versionCode: 1
+    versionName: "1.0.0"
+    
+    permissions:
+      - android.permission.VIBRATE
+    
+    manifest:
+      application:
+        android:label: "2048 Game"
+        android:icon: "@mipmap/ic_launcher"
+  
+  ios:
+    deployment-target: "11.0"
+    bundle-id: "com.example.game2048"
+    version: "1.0.0"
+    build-number: "1"
+    
+    config:
+uses-non-exempt-encryption: false
