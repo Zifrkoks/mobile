@@ -170,10 +170,10 @@ class Game2048Screen extends StatefulWidget {
   const Game2048Screen({super.key});
 
   @override
-  _Game2048ScreenState createState() => _Game2048ScreenState();
+  Game2048ScreenState createState() => Game2048ScreenState();
 }
 
-class _Game2048ScreenState extends State<Game2048Screen> {
+class Game2048ScreenState extends State<Game2048Screen> {
   late List<List<int>> grid;
   int score = 0;
   int bestScore = 0;
@@ -230,7 +230,58 @@ class _Game2048ScreenState extends State<Game2048Screen> {
       // HapticFeedback.vibrate(); - в реальном приложении
     }
   }
-
+   void validateGridState(List<List<int>> oldGrid) {
+    try {
+      // Проверка на наличие некорректных значений
+      int emptyCells = 0;
+      int maxValue = 0;
+      
+      for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
+          int value = grid[i][j];
+          
+          // Проверка на отрицательные значения
+          if (value < 0) {
+            debugPrint('ОШИБКА: отрицательное значение в [$i,$j]: $value');
+            grid[i][j] = 0; // Исправление
+          }
+          
+          // Проверка на слишком большие значения
+          if (value > 2048 * 16) { // Необоснованно большое значение
+            debugPrint('ОШИБКА: слишком большое значение в [$i,$j]: $value');
+            grid[i][j] = 2048; // Ограничение
+          }
+          
+          if (value == 0) emptyCells++;
+          if (value > maxValue) maxValue = value;
+        }
+      }
+      
+      // Проверка, что сетка не заполнена полностью при наличии возможных ходов
+      if (emptyCells == 0) {
+        debugPrint('Сетка полностью заполнена, максимальное значение: $maxValue');
+      }
+      
+      // Сравнение с предыдущим состоянием
+      bool identical = true;
+      for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 4; j++) {
+          if (grid[i][j] != oldGrid[i][j]) {
+            identical = false;
+            break;
+          }
+        }
+        if (!identical) break;
+      }
+      
+      if (identical) {
+        debugPrint('Сетка не изменилась после движения');
+      }
+      
+    } catch (e) {
+      debugPrint('Ошибка валидации сетки: $e');
+    }
+  }
   void initGame() {
     try {
       // Сброс всех состояний
@@ -245,8 +296,8 @@ class _Game2048ScreenState extends State<Game2048Screen> {
       });
       
       // Добавляем две начальные плитки
-      _addRandomTileWithValidation();
-      _addRandomTileWithValidation();
+      addRandomTileWithValidation();
+      addRandomTileWithValidation();
       
       debugPrint('Новая игра инициализирована');
     } catch (e) {
@@ -282,7 +333,7 @@ class _Game2048ScreenState extends State<Game2048Screen> {
     }
     debugPrint('=============================');
   }
-  void _addRandomTileWithValidation() {
+  void addRandomTileWithValidation() {
     try {
       List<Point> emptyCells = [];
       for (int i = 0; i < 4; i++) {
@@ -600,7 +651,7 @@ class _Game2048ScreenState extends State<Game2048Screen> {
     }
   }
   // ИСПРАВЛЕННЫЙ метод проверки конца игры
-  void _checkGameOver() {
+  void checkGameOver() {
     if (gameWon) return;
     
     try {
@@ -664,30 +715,6 @@ class _Game2048ScreenState extends State<Game2048Screen> {
     }
   }
 
-  void checkGameOver() {
-    if (gameWon) return;
-    
-    for (int i = 0; i < 4; i++) {
-      for (int j = 0; j < 4; j++) {
-        if (grid[i][j] == 0) {
-          return;
-        }
-      }
-    }
-    
-    for (int i = 0; i < 4; i++) {
-      for (int j = 0; j < 4; j++) {
-        if (j < 3 && grid[i][j] == grid[i][j + 1]) {
-          return;
-        }
-        if (i < 3 && grid[i][j] == grid[i + 1][j]) {
-          return;
-        }
-      }
-    }
-    
-    gameOver = true;
-  }
 
   // Диалог победы
   void _showWinDialog() {
